@@ -68,6 +68,7 @@ The three checkpoints come from the **acceptance criteria** at the end of each s
 - Drag screenshots anywhere onto the Notes page; they land in the pending area, and **Save** calls the AI immediately.
 - Each save appends one `## HH:mm · 截图笔记` block — **earlier content is never touched**.
 - The chat box only rewrites the most recently saved block. Quick actions: **Shorter**, **Rephrase**, **Highlight**.
+- Each block has an **Edit** button at its top-right; it edits just that block's Markdown and leaves every other block untouched.
 - Screenshots and notes stay local; images are sent to DeepSeek only when you click Save.
 
 ### 5. "Today's links" footer
@@ -90,7 +91,7 @@ A fixed row with the day's main video and study-site homepages, opening in new t
 - **Thumbnails**: shown two per row with the full screenshot; click to enlarge, click × to remove.
 - **Compression**: images are resized in the browser to a 1400 px longest edge as PNG before upload, saving bandwidth and tokens.
 - **Save**: images are written to disk first → the AI follows `agent/笔记生成.md` → the result is appended to `笔记.md`. If anything fails, the images just saved are removed, so no orphan files are left.
-- **Only the last block moves**: every save creates a `## HH:mm · 截图笔记` block, and chat edits replace only the final block. The server guarantees earlier blocks are never rewritten.
+- **AI only touches the last block**: every save creates a `## HH:mm · 截图笔记` block, and chat edits replace only the final block. The manual **Edit** button can change any block, but still replaces only that one.
 - **Chat can see the image**: when editing the last block, its referenced screenshots are sent to the model again, so it can revise while looking at the image.
 
 ---

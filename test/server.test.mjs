@@ -39,6 +39,7 @@ test('静态看板能打开，笔记页的 DOM 在', async () => {
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /text\/html/);
   assert.match(r.data, /id="view-notes"/);
+  assert.match(r.data, /id="blockModal"/);
   assert.match(r.data, /id="saveNote"/);
   assert.match(r.data, /data-quick="更简短"/);
   assert.match(r.data, /data-quick="换一句"/);
@@ -186,4 +187,28 @@ test('设置：Key 写入 0600，不回传明文，配置文件不能被静态�
 
   const blocked = await req(base, '/config.local.json');
   assert.equal(blocked.status, 404);
+});
+
+test('手动编辑某一块：只动这一块，其它块不变', async () => {
+  const before = (await req(base, `/api/notes/${day}`)).data.note;
+  assert.ok(before.blockCount >= 2);
+
+  const r = await req(base, `/api/notes/${day}/block`, {
+    method: 'POST',
+    body: { index: 0, body: '**手动改过**\n- 只改这一块' },
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.note.blockCount, before.blockCount);
+  assert.match(r.data.note.blocks[0].preview, /手动改过/);
+  assert.equal(r.data.note.blocks[1].preview, before.blocks[1].preview);
+  assert.match(r.data.note.markdown, new RegExp(before.blocks[0].heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const badIndex = await req(base, `/api/notes/${day}/block`, { method: 'POST', body: { index: 99, body: 'x' } });
+  assert.equal(badIndex.status, 404);
+
+  const empty = await req(base, `/api/notes/${day}/block`, { method: 'POST', body: { index: 0, body: '   ' } });
+  assert.equal(empty.status, 400);
+
+  const heading = await req(base, `/api/notes/${day}/block`, { method: 'POST', body: { index: 0, body: '## 偷渡标题\nx' } });
+  assert.equal(heading.status, 400);
 });

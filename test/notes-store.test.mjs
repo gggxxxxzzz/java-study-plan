@@ -106,3 +106,22 @@ test('删除截图只删指定文件', async () => {
   const onDisk = await fs.readdir(path.join(root, '2026-11-17', 'images'));
   assert.equal(onDisk.length, files.length - 1);
 });
+
+test('手动编辑中间一块，标题和前后块都不动', async () => {
+  await store.appendBlock('2026-11-22', '09:00 · 截图笔记', '**第一块**\n- a');
+  await store.appendBlock('2026-11-22', '10:00 · 截图笔记', '**第二块**\n- b');
+  await store.appendBlock('2026-11-22', '11:00 · 截图笔记', '**第三块**\n- c');
+
+  const before = store.parseBlocks(await store.read('2026-11-22'));
+  const res = await store.replaceBlockBody('2026-11-22', 1, '**第二块手动改**\n- 改过了');
+  assert.equal(res.heading, '## 10:00 · 截图笔记');
+
+  const after = store.parseBlocks(await store.read('2026-11-22'));
+  assert.equal(after.length, 3);
+  assert.equal(after[0].body, before[0].body);
+  assert.equal(after[1].body, '**第二块手动改**\n- 改过了');
+  assert.equal(after[1].heading, before[1].heading);
+  assert.equal(after[2].body, before[2].body);
+  await assert.rejects(() => store.replaceBlockBody('2026-11-22', 9, 'x'), /不存在/);
+  await assert.rejects(() => store.replaceBlockBody('2026-11-22', 0, '  '), /不能是空/);
+});

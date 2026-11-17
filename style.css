@@ -617,3 +617,19 @@ body[data-view="notes"] .dock{display:none}
 .drop-veil-card strong{font-size:17px;letter-spacing:.2px}
 .drop-veil-card span{font-size:11.5px;color:var(--ink-3)}
 #view-notes.is-dragging .drop-zone{border-color:rgba(10,132,255,.75);background:rgba(10,132,255,.10)}
+
+/* ============ 手动编辑某一块 ============ */
+#notesPreview h2{position:relative;padding-right:66px}
+.block-edit-btn{position:absolute;right:0;top:16px;padding:3px 9px;border-radius:8px;cursor:pointer;
+  font-size:11px;font-weight:600;line-height:1.5;color:var(--accent);
+  background:rgba(10,132,255,.07);border:1px solid rgba(10,132,255,.16);
+  opacity:.72;transition:opacity .16s ease,background .16s ease}
+#notesPreview h2:hover .block-edit-btn{opacity:1}
+.block-edit-btn:hover{background:rgba(10,132,255,.14)}
+.block-modal-card{width:min(720px,100%)}
+.block-modal-sub{font-size:11.5px;color:var(--ink-3);margin-top:-7px}
+.block-editor-text{width:100%;min-height:300px;max-height:52vh;resize:vertical;outline:none;
+  border-radius:14px;border:1px solid rgba(15,23,42,.12);background:#fff;color:var(--ink);
+  padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px;line-height:1.75;transition:border-color .18s,box-shadow .18s}
+.block-editor-text:focus{border-color:rgba(10,132,255,.5);box-shadow:0 0 0 4px rgba(10,132,255,.10)}

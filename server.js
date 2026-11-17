@@ -275,7 +275,7 @@ export function createApp(options = {}) {
     }
 
     // ---------- 单天笔记 ----------
-    const noteMatch = pathname.match(/^\/api\/notes\/(\d{4}-\d{2}-\d{2})(?:\/(save|chat|open))?$/);
+    const noteMatch = pathname.match(/^\/api\/notes\/(\d{4}-\d{2}-\d{2})(?:\/(save|chat|block|open))?$/);
     if (noteMatch) {
       const date = assertDate(noteMatch[1]);
       const action = noteMatch[2] || '';
@@ -327,6 +327,28 @@ export function createApp(options = {}) {
             await store.removeImages(date, saved.map(s => s.file));
             throw e;
           }
+        });
+      }
+
+      if (action === 'block' && req.method === 'POST') {
+        const body = await readJson(req);
+        const index = Number(body.index);
+        if (!Number.isInteger(index) || index < 0) throw httpError(400, '要改哪一块没指定');
+        const text = String(body.body || '').trim();
+        if (!text) throw httpError(400, '这一块不能是空的');
+        if (text.length > 20000) throw httpError(413, '这一块太长了，删减一点再存');
+        assertNoBlockHeading(text);
+
+        return withLock(date, async () => {
+          const saved = await store.replaceBlockBody(date, index, text);
+          const info = await store.noteInfo(date);
+          return json(res, 200, {
+            ok: true,
+            date,
+            index,
+            heading: saved.heading,
+            note: info,
+          });
         });
       }
 
@@ -487,6 +509,16 @@ export async function start() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   return app;
+}
+
+function assertNoBlockHeading(text) {
+  let inCode = false;
+  for (const line of String(text || '').split('\n')) {
+    if (/^```/.test(line.trim())) { inCode = !inCode; continue; }
+    if (!inCode && /^##\s+/.test(line)) {
+      throw httpError(400, '块里不能再写 ## 标题，用 **加粗小标题** 代替');
+    }
+  }
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

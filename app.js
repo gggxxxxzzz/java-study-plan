@@ -64,6 +64,8 @@
     loadSeq: 0,
     busy: false,
     chatBusy: false,
+    editIndex: null,
+    editBusy: false,
     saveMsg: { text: '', type: '' }
   };
 
@@ -423,7 +425,7 @@
     btn.className = 'btn glass wide';
     btn.textContent = '打开这天的笔记';
     btn.addEventListener('click', () => {
-      if (notes.busy || notes.chatBusy) { toast('等这次保存完再切'); return; }
+      if (notes.busy || notes.chatBusy || notes.editBusy) { toast('等这次保存完再切'); return; }
       notes.date = date;
       notes.note = null;
       notes.shots = [];
@@ -498,7 +500,106 @@
     $('#notesPreview').innerHTML = count
       ? window.Markdown.render(n.markdown, { imageBase: `/notes/${date}/` })
       : '';
+    decorateBlockEditors();
     $('#notesEmpty').hidden = count > 0;
+  }
+
+  /* 每块右上角的「编辑」按钮 + 手动编辑弹窗 */
+  function splitNoteBlocks(md) {
+    const lines = String(md || '').split('\n');
+    const starts = [];
+    let inCode = false;
+    lines.forEach((line, i) => {
+      if (/^```/.test(line.trim())) { inCode = !inCode; return; }
+      if (!inCode && /^##\s+/.test(line)) starts.push(i);
+    });
+    return starts.map((start, i) => {
+      const end = i + 1 < starts.length ? starts[i + 1] : lines.length;
+      return {
+        heading: lines[start].replace(/^##\s+/, '').trim(),
+        body: lines.slice(start + 1, end).join('\n').trim(),
+      };
+    });
+  }
+
+  function decorateBlockEditors() {
+    const heads = $('#notesPreview').querySelectorAll('h2');
+    heads.forEach((head, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'block-edit-btn';
+      btn.dataset.index = String(index);
+      btn.textContent = '编辑';
+      btn.title = '手动编辑这一块';
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        openBlockEditor(index);
+      });
+      head.append(btn);
+    });
+  }
+
+  function openBlockEditor(index) {
+    if (notes.busy || notes.chatBusy || notes.editBusy) { toast('稍等，正在处理中'); return; }
+    const n = notes.note;
+    if (!n) return;
+    const blocks = splitNoteBlocks(n.markdown);
+    const block = blocks[index];
+    if (!block) { toast('这一块不存在，点「刷新」再试'); return; }
+
+    notes.editIndex = index;
+    $('#blockEditorHeading').textContent = `${block.heading} · 只改这一块`;
+    $('#blockEditorText').value = block.body;
+    $('#blockEditorState').textContent = `第 ${index + 1} / ${blocks.length} 块，保存后只替换这一块的正文`;
+    $('#blockEditorSave').disabled = false;
+    $('#blockModal').hidden = false;
+    setTimeout(() => $('#blockEditorText').focus(), 40);
+  }
+
+  function closeBlockEditor() {
+    if (notes.editBusy) return;
+    $('#blockModal').hidden = true;
+    notes.editIndex = null;
+  }
+
+  async function saveBlockEditor() {
+    const index = notes.editIndex;
+    if (index === null || notes.editBusy) return;
+    const body = $('#blockEditorText').value.trim();
+    if (!body) {
+      $('#blockEditorState').textContent = '这一块不能是空的。';
+      return;
+    }
+
+    notes.editBusy = true;
+    $('#blockEditorSave').disabled = true;
+    $('#blockEditorState').textContent = '正在保存…';
+    try {
+      const data = await api(`/api/notes/${notes.date}/block`, {
+        method: 'POST',
+        body: { index, body },
+      });
+      notes.note = data.note;
+      $('#blockModal').hidden = true;
+      notes.editIndex = null;
+      renderNotesMain();
+      scrollToBlock(index);
+      toast('已保存这一块');
+      refreshDays();
+      if (notes.date === todayStr()) refreshMiniNote();
+    } catch (e) {
+      $('#blockEditorState').textContent = e.message;
+    } finally {
+      notes.editBusy = false;
+      $('#blockEditorSave').disabled = false;
+    }
+  }
+
+  function scrollToBlock(index) {
+    const heads = $('#notesPreview').querySelectorAll('h2');
+    const head = heads[index];
+    if (head) requestAnimationFrame(() => head.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
 
   /* 保存/聊天后把最新那一块带到眼前（等图片把高度撑开再滚） */
@@ -796,7 +897,9 @@
   }
 
   async function selectNote(date) {
-    if (notes.busy || notes.chatBusy) { toast('等这次保存完再切'); return; }
+    if (notes.busy || notes.chatBusy || notes.editBusy) { toast('等这次保存完再切'); return; }
+    $('#blockModal').hidden = true;
+    notes.editIndex = null;
     notes.date = date;
     notes.note = null;
     notes.shots = [];
@@ -1195,6 +1298,14 @@
     });
     $('#lightbox').addEventListener('click', closeLightbox);
 
+    /* 手动编辑某一块 */
+    $('#blockEditorClose').addEventListener('click', closeBlockEditor);
+    $('#blockEditorCancel').addEventListener('click', closeBlockEditor);
+    $('#blockEditorSave').addEventListener('click', saveBlockEditor);
+    $('#blockModal').addEventListener('click', e => {
+      if (e.target === $('#blockModal')) closeBlockEditor();
+    });
+
     /* 设置 */
     $('#openSettings').addEventListener('click', openSettings);
     $('#closeSettings').addEventListener('click', closeSettings);
@@ -1206,6 +1317,7 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         if (!$('#lightbox').hidden) closeLightbox();
+        else if (!$('#blockModal').hidden) closeBlockEditor();
         else if (!$('#settingsModal').hidden) closeSettings();
       }
     });
