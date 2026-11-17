@@ -487,6 +487,13 @@
   }
 
   /* ---------------- 笔记：正文 ---------------- */
+  function localizeNoteHeadings(md) {
+    if (!window.I18N || I18N.lang !== 'en') return md;
+    return md
+      .replace(/^(# .+?) · 学习笔记\s*$/m, '$1 · Study notes')
+      .replace(/^(## \d{1,2}:\d{2}) · 截图笔记\s*$/gm, '$1 · Screenshot notes');
+  }
+
   function renderNotesMain() {
     const n = notes.note;
     const date = notes.date;
@@ -505,7 +512,7 @@
     $('#notesMeta').textContent = metaBits.join(' · ');
 
     $('#notesPreview').innerHTML = count
-      ? window.Markdown.render(n.markdown, { imageBase: `/notes/${date}/` })
+      ? window.Markdown.render(localizeNoteHeadings(n.markdown), { imageBase: `/notes/${date}/` })
       : '';
     decorateBlockEditors();
     $('#notesEmpty').hidden = count > 0;
@@ -556,9 +563,13 @@
     if (!block) { toast('这一块不存在，点「刷新」再试'); return; }
 
     notes.editIndex = index;
-    $('#blockEditorHeading').textContent = `${block.heading} · 只改这一块`;
+    const en = window.I18N && I18N.lang === 'en';
+    const heading = en ? block.heading.replace('截图笔记', 'Screenshot notes') : block.heading;
+    $('#blockEditorHeading').textContent = en ? `${heading} · Only this block` : `${heading} · 只改这一块`;
     $('#blockEditorText').value = block.body;
-    $('#blockEditorState').textContent = `第 ${index + 1} / ${blocks.length} 块，保存后只替换这一块的正文`;
+    $('#blockEditorState').textContent = en
+      ? `Block ${index + 1} of ${blocks.length}. Saving replaces only this block's body.`
+      : `第 ${index + 1} / ${blocks.length} 块，保存后只替换这一块的正文`;
     $('#blockEditorSave').disabled = false;
     $('#blockModal').hidden = false;
     setTimeout(() => $('#blockEditorText').focus(), 40);
