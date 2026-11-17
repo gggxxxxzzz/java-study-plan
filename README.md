@@ -1,5 +1,7 @@
 # 后端就业学习路线 · 每日学习看板
 
+[中文](README.md) · [English](README.en.md)
+
 一个**纯前端、零依赖、下载即用**的本地学习计划看板。把 162 天的后端学习路线做成每天打开就能看的清单：今天学什么、每条要花多久、学完勾掉、当天链接一键直达、日历回看。
 
 后来把原来的「随手写日记」升级成了「截图 AI 笔记」：课堂截图拖进来，点一次「手动保存」，AI 识图后把知识点重新排好，用最少的字写注释和理解，按天存成 Markdown。
@@ -118,7 +120,8 @@ Java学习计划/
 ├── preview.png           界面截图
 ├── notes/                每天一个文件夹（不提交，自动生成）
 ├── config.local.json     你的 DeepSeek Key（不提交，权限 0600）
-└── README.md
+├── README.md             中文说明
+└── README.en.md          English README
 ```
 
 看板部分运行时不联网，任务勾选只写在浏览器 localStorage（键名 `javaplan.tasks.v1`）。笔记功能需要本地服务，笔记内容存在 `notes/` 里，是纯 Markdown，随时可以整个文件夹备份或同步。
