@@ -1,12 +1,15 @@
-/* 交互逻辑：勾任务、环形进度、日历、日记、底部网站栏、实时时钟
-   数据存在 localStorage：勾选 javaplan.tasks.v1 / 日记 javaplan.diary.v1 */
+/* 交互逻辑：勾任务、环形进度、日历、截图笔记、底部网站栏、实时时钟
+   任务勾选仍存 localStorage（javaplan.tasks.v1）。
+   笔记不走 localStorage：截图和 笔记.md 落在本地 notes/YYYY-MM-DD/ 文件夹，
+   由本地 Node 服务（server.js）调用 DeepSeek 生成。 */
 (() => {
   'use strict';
 
   const LS_TASKS = 'javaplan.tasks.v1';
-  const LS_DIARY = 'javaplan.diary.v1';
   const RING_LEN = 2 * Math.PI * 38;          // 238.76
   const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  const MAX_SHOTS = 10;
+  const MAX_SHOT_BYTES = 26 * 1024 * 1024;
 
   /* ---------------- 小工具 ---------------- */
   const pad = n => String(n).padStart(2, '0');
@@ -14,7 +17,10 @@
   const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const todayStr = () => ymd(new Date());
   const fmtCn = s => { const d = parse(s); return `${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
+  const fmtFull = s => { const d = parse(s); return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · ${WEEK[d.getDay()]}`; };
+  const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
 
   function loadLS(key, fallback) {
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
@@ -26,6 +32,13 @@
   function debounce(fn, ms) {
     let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
   }
+  function stripMd(text) {
+    return String(text || '')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/[*_`>#=~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   const PLAN_DATES = Object.keys(PLAN.days).sort();
   const LAST_DATE = PLAN_DATES[PLAN_DATES.length - 1];
@@ -36,11 +49,22 @@
     miniMonth: null,   // {y, m}
     calMonth: null,
     calSel: null,
-    diaryDate: null,
     tasks: loadLS(LS_TASKS, {}),   // { 'YYYY-MM-DD': {0:1, 2:1} }
-    diary: loadLS(LS_DIARY, {}),   // { 'YYYY-MM-DD': '文本' }
     ver: 0,                        // 数据版本号：变了才重渲染
     viewVer: null                  // 各视图已渲染到的版本
+  };
+
+  const notes = {
+    date: todayStr(),
+    days: [],
+    note: null,
+    shots: [],
+    chats: {},          // date -> [{ role, text, time }]
+    status: null,       // /api/status 的结果
+    loadSeq: 0,
+    busy: false,
+    chatBusy: false,
+    saveMsg: { text: '', type: '' }
   };
 
   /* ---------------- 进度工具 ---------------- */
@@ -72,6 +96,60 @@
     if (state.view === 'calendar') { renderCalendar(); renderDetail(state.calSel); }
     const p = PLAN.days[date];
     if (p && doneCount(date) === p.tasks.length) toast('今天的任务全部完成了');
+  }
+
+  /* ---------------- 本地服务 API ---------------- */
+  async function api(path, { method = 'GET', body } = {}) {
+    let res;
+    try {
+      res = await fetch(path, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        cache: 'no-store',
+      });
+    } catch (e) {
+      throw new Error('连不上本地服务');
+    }
+    let data = {};
+    try { data = await res.json(); } catch (e) { /* 空响应 */ }
+    if (!res.ok) throw new Error(data.error || `请求失败（${res.status}）`);
+    return data;
+  }
+
+  function setServer(ok, status) {
+    const dot = $('#serverDot');
+    if (!dot) return;
+    dot.classList.toggle('is-on', !!ok);
+    dot.classList.toggle('is-off', !ok);
+    if (!ok) { dot.title = '本地服务没启动'; return; }
+    const s = status || notes.status;
+    dot.title = s && s.mock
+      ? '本地服务已连接 · 模拟模式'
+      : s && s.hasKey ? `本地服务已连接 · DeepSeek ${s.model}` : '本地服务已连接 · 还没填 API Key';
+  }
+
+  async function loadStatus() {
+    try {
+      const s = await api('/api/status');
+      notes.status = s;
+      setServer(true, s);
+      return s;
+    } catch (e) {
+      notes.status = null;
+      setServer(false);
+      return null;
+    }
+  }
+
+  async function ensureServer() {
+    if (notes.status) return true;
+    const s = await loadStatus();
+    if (!s) {
+      toast('本地服务没启动：双击「启动.command」，或运行 node server.js');
+      return false;
+    }
+    return true;
   }
 
   /* ---------------- 渲染：任务列表 ---------------- */
@@ -173,8 +251,6 @@
       tasks.textContent = '';
       tip.style.display = 'none';
     }
-
-    renderTodayDiary();
   }
 
   /* ---------------- 渲染：小日历 ---------------- */
@@ -297,9 +373,9 @@
     if (!p) {
       const rest = document.createElement('div');
       rest.className = 'rest-box';
-      rest.textContent = '这天没有排任务，自由安排。想复习、补笔记、刷两道题都可以，也可以直接在右下角去写日记。';
+      rest.textContent = '这天没有排任务，自由安排。想复习、补笔记、刷两道题都可以，右下角可以直接打开这天的笔记。';
       box.append(rest);
-      box.append(diaryJump(date));
+      box.append(noteJump(date));
       return;
     }
 
@@ -338,104 +414,528 @@
       box.append(tip);
     }
 
-    box.append(diaryJump(date));
+    box.append(noteJump(date));
   }
 
-  function diaryJump(date) {
+  function noteJump(date) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn glass wide';
-    btn.textContent = '写这天的日记';
+    btn.textContent = '打开这天的笔记';
     btn.addEventListener('click', () => {
-      state.diaryDate = date;
-      setView('diary');
+      if (notes.busy || notes.chatBusy) { toast('等这次保存完再切'); return; }
+      notes.date = date;
+      notes.note = null;
+      notes.shots = [];
+      notes.saveMsg = { text: '', type: '' };
+      setView('notes');
     });
     return btn;
   }
 
-  /* ---------------- 日记 ---------------- */
-  function diaryText(date) { return state.diary[date] || ''; }
-
-  function saveDiary(date, text) {
-    touchData();
-    if (text.trim()) state.diary[date] = text;
-    else delete state.diary[date];
-    saveLS(LS_DIARY, state.diary);
-  }
-
-  function renderTodayDiary() {
-    const ds = todayStr();
-    const ta = $('#todayDiary');
-    ta.value = diaryText(ds);
-    $('#todayDiaryCount').textContent = ta.value.trim().length + ' 字';
-  }
-
-  function renderDiaryEditor() {
-    const date = state.diaryDate || todayStr();
-    state.diaryDate = date;
-    const ta = $('#diaryBig');
-    ta.value = diaryText(date);
-    $('#diaryCount').textContent = ta.value.trim().length + ' 字';
-    $('#diaryDate').value = date;
-    const p = PLAN.days[date];
-    $('#diaryTitle').textContent = p ? `${fmtCn(date)} · ${p.topic}` : `${fmtCn(date)} · 日记`;
-  }
-
-  function renderDiaryList() {
-    const ul = $('#diaryEntries');
+  /* ---------------- 笔记：侧栏 ---------------- */
+  function renderNotesSide() {
+    $('#notesSideSub').textContent = `notes/${notes.date}/`;
+    const ul = $('#notesDays');
     ul.textContent = '';
-    const dates = Object.keys(state.diary)
-      .filter(d => (state.diary[d] || '').trim())
-      .sort()
-      .reverse();
 
-    $('#diaryTotal').textContent = dates.length + ' 篇';
+    const days = notes.days.slice();
+    if (!days.some(d => d.date === notes.date)) {
+      days.unshift({ date: notes.date, blockCount: 0, imageCount: 0, preview: '' });
+    }
 
-    if (!dates.length) {
+    if (!days.length) {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = '还没写过日记。上面写两句就会自动存下来。';
+      li.textContent = '还没有笔记。贴一张截图保存就会建当天的文件夹。';
       ul.append(li);
       return;
     }
 
-    dates.forEach(date => {
+    days.forEach(day => {
       const li = document.createElement('li');
-      const head = document.createElement('div');
-      head.className = 'ed-date';
-      const d = parse(date);
-      head.textContent = `${fmtCn(date)} · ${WEEK[d.getDay()]}`;
-      const pre = document.createElement('div');
-      pre.className = 'ed-pre';
-      pre.textContent = state.diary[date].replace(/\s+/g, ' ').slice(0, 70);
-      li.append(head, pre);
-      li.addEventListener('click', () => {
-        state.diaryDate = date;
-        renderDiaryEditor();
-        $('#diaryBig').focus();
-      });
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'notes-day' + (day.date === notes.date ? ' is-active' : '');
+      const d = parse(day.date);
+      const top = document.createElement('span');
+      top.className = 'nd-top';
+      const date = document.createElement('strong');
+      date.textContent = `${d.getMonth() + 1}-${d.getDate()}`;
+      const week = document.createElement('span');
+      week.textContent = WEEK[d.getDay()];
+      top.append(date, week);
+      const meta = document.createElement('span');
+      meta.className = 'nd-meta';
+      meta.textContent = day.blockCount || day.imageCount
+        ? `${day.blockCount} 块 · ${day.imageCount} 张图`
+        : '还没有内容';
+      btn.append(top, meta);
+      btn.addEventListener('click', () => selectNote(day.date));
+      li.append(btn);
       ul.append(li);
     });
   }
 
-  function exportDiary() {
-    const dates = Object.keys(state.diary).filter(d => (state.diary[d] || '').trim()).sort();
-    if (!dates.length) { toast('还没有可以导出的日记'); return; }
-    const body = dates.map(d => {
-      const w = WEEK[parse(d).getDay()];
-      const topic = PLAN.days[d] ? `（${PLAN.days[d].topic}）` : '';
-      return `${d} ${w}${topic}\n${state.diary[d].trim()}\n`;
-    }).join('\n');
-    const blob = new Blob(['Java 学习日记\n\n' + body], { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `Java学习日记-${todayStr()}.txt`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-    toast(`已导出 ${dates.length} 篇日记`);
+  /* ---------------- 笔记：正文 ---------------- */
+  function renderNotesMain() {
+    const n = notes.note;
+    const date = notes.date;
+    $('#notesTitle').textContent = fmtFull(date);
+
+    if (!n) {
+      $('#notesMeta').textContent = '正在读取…';
+      $('#notesPreview').innerHTML = '';
+      $('#notesEmpty').hidden = false;
+      return;
+    }
+
+    const count = n.blockCount || 0;
+    const metaBits = [`${count} 块`, `${n.imageCount || 0} 张截图`];
+    if (n.mtime) metaBits.push(`最后保存 ${hhmm(new Date(n.mtime))}`);
+    $('#notesMeta').textContent = metaBits.join(' · ');
+
+    $('#notesPreview').innerHTML = count
+      ? window.Markdown.render(n.markdown, { imageBase: `/notes/${date}/` })
+      : '';
+    $('#notesEmpty').hidden = count > 0;
   }
 
-  /* ---------------- 底部网站栏：今日主线链接 + 学习网站 ---------------- */
+  /* 保存/聊天后把最新那一块带到眼前（等图片把高度撑开再滚） */
+  function scrollPreviewToEnd() {
+    const preview = $('#notesPreview');
+    const go = () => requestAnimationFrame(() => {
+      const heads = preview.querySelectorAll('h2');
+      const last = heads[heads.length - 1];
+      if (last) last.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    const imgs = Array.from(preview.querySelectorAll('img')).filter(img => !img.complete);
+    if (!imgs.length) { setTimeout(go, 30); return; }
+    let left = imgs.length;
+    const done = () => { if (--left <= 0) go(); };
+    imgs.forEach(img => {
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+    setTimeout(go, 900);
+  }
+
+  /* ---------------- 笔记：截图区 ---------------- */
+  function renderShotList() {
+    const box = $('#shotList');
+    box.textContent = '';
+    notes.shots.forEach((shot, idx) => {
+      const el = document.createElement('div');
+      el.className = 'shot';
+
+      const img = document.createElement('img');
+      img.src = shot.dataUrl;
+      img.alt = shot.name || '截图';
+      img.title = '点开看大图';
+      img.addEventListener('click', () => openLightbox(shot.dataUrl));
+
+      const tag = document.createElement('span');
+      tag.className = 'shot-tag';
+      tag.textContent = `${shot.w}×${shot.h}`;
+
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'shot-rm';
+      rm.textContent = '×';
+      rm.title = '移除这张';
+      rm.setAttribute('aria-label', '移除这张截图');
+      rm.addEventListener('click', e => {
+        e.stopPropagation();
+        notes.shots.splice(idx, 1);
+        renderShotList();
+        renderCompose();
+      });
+
+      el.append(img, tag, rm);
+      box.append(el);
+    });
+  }
+
+  function renderCompose() {
+    $('#shotCount').textContent = `${notes.shots.length} / ${MAX_SHOTS}`;
+    const busy = notes.busy || notes.chatBusy;
+    const btn = $('#saveNote');
+    btn.disabled = busy || notes.shots.length === 0;
+    btn.classList.toggle('is-busy', notes.busy);
+    btn.querySelector('.btn-label').textContent = notes.busy ? 'AI 正在记…' : '手动保存';
+    $('#saveStatus').textContent = notes.saveMsg.text || (notes.shots.length ? '放好了就点保存，AI 会马上整理并写进 md。' : '');
+    $('#saveStatus').className = 'save-status' + (notes.saveMsg.type ? ' is-' + notes.saveMsg.type : '');
+
+    $$('#quickRow button').forEach(b => { b.disabled = busy; });
+    const send = $('#chatSend');
+    send.disabled = busy;
+    send.textContent = notes.chatBusy ? '…' : '发送';
+    $('#chatInput').disabled = busy;
+    $('#noteHint').disabled = notes.busy;
+  }
+
+  async function addFiles(fileList) {
+    if (!(await ensureServer())) return;
+    const files = Array.from(fileList).filter(f => /^image\//.test(f.type));
+    if (!files.length) { toast('只支持图片文件'); return; }
+
+    const before = notes.shots.length;
+    for (const file of files) {
+      if (notes.shots.length >= MAX_SHOTS) { toast(`一次最多 ${MAX_SHOTS} 张截图`); break; }
+      try {
+        const shot = await compressImage(file);
+        const total = notes.shots.reduce((n, s) => n + s.bytes, 0) + shot.bytes;
+        if (total > MAX_SHOT_BYTES) { toast('截图总量太大了，删掉一两张再放'); break; }
+        notes.shots.push(shot);
+      } catch (e) {
+        toast(`「${file.name || '截图'}」读不出来`);
+      }
+    }
+    const added = notes.shots.length - before;
+    if (added > 0) {
+      notes.saveMsg = { text: `已加 ${added} 张，点「手动保存」让 AI 开始整理`, type: '' };
+      toast(`已加 ${added} 张截图`);
+      if (window.innerWidth <= 1080) {
+        document.querySelector('.notes-compose').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } else {
+      notes.saveMsg = { text: '', type: '' };
+    }
+    renderShotList();
+    renderCompose();
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const max = 1400;
+          const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(1, Math.round(img.naturalWidth * scale));
+          const h = Math.max(1, Math.round(img.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/png');
+          URL.revokeObjectURL(url);
+          resolve({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: file.name || '截图',
+            dataUrl,
+            bytes: Math.round(dataUrl.length * 0.75),
+            w, h,
+          });
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          reject(e);
+        }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+      img.src = url;
+    });
+  }
+
+  /* ---------------- 笔记：保存 ---------------- */
+  async function saveNote() {
+    if (notes.busy || notes.chatBusy) return;
+    if (!notes.shots.length) { toast('先放一张截图'); return; }
+    if (!(await ensureServer())) return;
+
+    const date = notes.date;
+    notes.busy = true;
+    notes.saveMsg = { text: '正在上传截图，等 AI 看完图就写进来…', type: '' };
+    renderCompose();
+
+    try {
+      const data = await api(`/api/notes/${date}/save`, {
+        method: 'POST',
+        body: {
+          images: notes.shots.map(s => s.dataUrl),
+          hint: $('#noteHint').value.trim(),
+        },
+      });
+
+      if (notes.date === date) {
+        notes.note = data.note;
+        notes.shots = [];
+        $('#noteHint').value = '';
+        notes.saveMsg = { text: `已保存 ${data.heading}，前面的笔记没动`, type: 'ok' };
+        renderNotesMain();
+        scrollPreviewToEnd();
+        renderShotList();
+        addChat('sys', `已保存 ${data.heading}，前面的内容原样保留。`, date);
+      } else {
+        toast(`已保存到 ${date}`);
+      }
+      refreshDays();
+      if (date === todayStr()) refreshMiniNote();
+      toast('笔记已保存');
+    } catch (e) {
+      notes.saveMsg = { text: e.message, type: 'err' };
+      toast(e.message);
+      if (/API Key/.test(e.message)) openSettings();
+    } finally {
+      notes.busy = false;
+      renderCompose();
+    }
+  }
+
+  /* ---------------- 笔记：聊天 ---------------- */
+  function chatFor(date) {
+    if (!notes.chats[date]) notes.chats[date] = [];
+    return notes.chats[date];
+  }
+
+  function addChat(role, text, date = notes.date) {
+    const arr = chatFor(date);
+    arr.push({ role, text, time: hhmm(new Date()) });
+    if (arr.length > 40) arr.splice(0, arr.length - 40);
+    if (notes.date === date) renderChatLog();
+  }
+
+  function renderChatLog() {
+    const log = $('#chatLog');
+    log.textContent = '';
+
+    const tip = document.createElement('p');
+    tip.className = 'chat-tip';
+    tip.textContent = '三个按钮是快捷要求，也可以在下面自己说。改的永远是最新保存的那一块，前面的笔记不会动。';
+    log.append(tip);
+
+    (notes.chats[notes.date] || []).forEach(msg => {
+      if (msg.role === 'sys') {
+        const p = document.createElement('p');
+        p.className = 'chat-sys';
+        p.textContent = msg.text;
+        log.append(p);
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = `chat-msg is-${msg.role}`;
+      const who = document.createElement('span');
+      who.className = 'chat-who';
+      who.textContent = msg.role === 'user' ? '你' : msg.role === 'error' ? '出错' : 'AI';
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      if (msg.role === 'assistant') {
+        bubble.classList.add('md-body');
+        bubble.innerHTML = window.Markdown.render(msg.text, { imageBase: `/notes/${notes.date}/` });
+      } else {
+        bubble.textContent = msg.text;
+      }
+      const time = document.createElement('span');
+      time.className = 'chat-time';
+      time.textContent = msg.time;
+      row.append(who, bubble, time);
+      log.append(row);
+    });
+
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function sendChat(request) {
+    request = String(request || '').trim();
+    if (!request || notes.busy || notes.chatBusy) return;
+    if (!(await ensureServer())) return;
+
+    const n = notes.note;
+    if (!n || !n.blockCount) {
+      toast('先贴截图保存一次，AI 才知道要改哪一块');
+      return;
+    }
+
+    const date = notes.date;
+    addChat('user', request, date);
+    notes.chatBusy = true;
+    renderCompose();
+
+    try {
+      const data = await api(`/api/notes/${date}/chat`, {
+        method: 'POST',
+        body: { request },
+      });
+      if (notes.date === date) {
+        notes.note = data.note;
+        renderNotesMain();
+        scrollPreviewToEnd();
+      }
+      addChat('assistant', data.body, date);
+      addChat('sys', `只改了「${data.heading}」，前面的块没动。`, date);
+      refreshDays();
+      if (date === todayStr()) refreshMiniNote();
+      toast('已修改最后一块');
+    } catch (e) {
+      addChat('error', e.message, date);
+      toast(e.message);
+      if (/API Key/.test(e.message)) openSettings();
+    } finally {
+      notes.chatBusy = false;
+      renderCompose();
+    }
+  }
+
+  /* ---------------- 笔记：日期切换与列表 ---------------- */
+  async function loadNote(date) {
+    const seq = ++notes.loadSeq;
+    try {
+      const data = await api(`/api/notes/${date}`);
+      if (seq !== notes.loadSeq || notes.date !== date) return;
+      notes.note = data.note;
+    } catch (e) {
+      if (seq !== notes.loadSeq || notes.date !== date) return;
+      notes.note = null;
+      if (/连不上本地服务/.test(e.message)) setServer(false);
+    }
+    renderNotesMain();
+  }
+
+  async function selectNote(date) {
+    if (notes.busy || notes.chatBusy) { toast('等这次保存完再切'); return; }
+    notes.date = date;
+    notes.note = null;
+    notes.shots = [];
+    notes.saveMsg = { text: '', type: '' };
+    $('#noteHint').value = '';
+    renderNotesSide();
+    renderNotesMain();
+    renderCompose();
+    renderShotList();
+    renderChatLog();
+    await loadNote(date);
+  }
+
+  async function refreshDays() {
+    try {
+      const data = await api('/api/notes/days');
+      notes.days = data.days || [];
+      renderNotesSide();
+    } catch (e) {
+      if (/连不上本地服务/.test(e.message)) setServer(false);
+    }
+  }
+
+  async function refreshMiniNote() {
+    const date = todayStr();
+    $('#miniNoteFolder').textContent = `notes/${date}/`;
+    try {
+      const data = await api(`/api/notes/${date}`);
+      const n = data.note;
+      $('#miniNoteCount').textContent = `${n.blockCount} 块 · ${n.imageCount} 张截图`;
+      const last = n.blocks[n.blocks.length - 1];
+      $('#miniNotePreview').textContent = last
+        ? stripMd(last.preview).slice(0, 80)
+        : '还没有截图。去「笔记」页拖一张进来，点手动保存就自动整理。';
+      const dot = $('#miniNoteState');
+      dot.textContent = n.mtime ? `已保存 ${hhmm(new Date(n.mtime))}` : '还没有';
+      dot.classList.toggle('is-saved', !!n.mtime);
+    } catch (e) {
+      $('#miniNoteCount').textContent = '0 块 · 0 张截图';
+      $('#miniNotePreview').textContent = '本地服务没启动。双击「启动.command」后才能用 AI 笔记。';
+      const dot = $('#miniNoteState');
+      dot.textContent = '离线';
+      dot.classList.remove('is-saved');
+      setServer(false);
+    }
+  }
+
+  function enterNotes() {
+    renderNotesSide();
+    renderNotesMain();
+    renderCompose();
+    renderShotList();
+    renderChatLog();
+    if (!notes.note || notes.note.date !== notes.date) loadNote(notes.date);
+    if (!notes.days.length) refreshDays();
+    if (!notes.status) loadStatus();
+  }
+
+  /* ---------------- 设置 ---------------- */
+  async function openSettings() {
+    $('#settingsModal').hidden = false;
+    $('#setKey').value = '';
+    $('#settingsState').textContent = '正在读取…';
+    try {
+      const s = await api('/api/status');
+      notes.status = s;
+      setServer(true, s);
+      $('#setBase').value = s.baseUrl;
+      $('#setModel').value = s.model;
+      $('#setKey').placeholder = s.hasKey ? `已保存 ${s.keyMasked}（留空不改）` : 'sk-…';
+      $('#settingsState').textContent = s.mock
+        ? '当前是模拟模式（JAVA_NOTES_MOCK=1），不会真的调用 DeepSeek。'
+        : s.hasKey
+          ? `Key 已配置${s.fromEnv ? '（来自环境变量）' : ''}，模型 ${s.model}。`
+          : '还没配置 Key。填好后点「保存」，再回笔记页保存一张截图试试。';
+    } catch (e) {
+      $('#settingsState').textContent = '本地服务没启动，先双击「启动.command」。';
+    }
+  }
+
+  function closeSettings() {
+    $('#settingsModal').hidden = true;
+  }
+
+  async function saveSettings() {
+    const body = {
+      baseUrl: $('#setBase').value.trim() || 'https://api.deepseek.com',
+      model: $('#setModel').value.trim() || 'deepseek-flash',
+    };
+    const key = $('#setKey').value.trim();
+    if (key) body.apiKey = key;
+
+    $('#settingsState').textContent = '正在保存…';
+    try {
+      await api('/api/config', { method: 'POST', body });
+      toast('设置已保存');
+      closeSettings();
+      await loadStatus();
+      refreshMiniNote();
+      if (!notes.note) loadNote(notes.date);
+    } catch (e) {
+      $('#settingsState').textContent = e.message;
+    }
+  }
+
+  async function testKey() {
+    const body = {
+      baseUrl: $('#setBase').value.trim(),
+      model: $('#setModel').value.trim(),
+    };
+    const key = $('#setKey').value.trim();
+    if (key) body.apiKey = key;
+    $('#settingsState').textContent = '正在连接 DeepSeek…';
+    $('#testKey').disabled = true;
+    try {
+      const data = await api('/api/config/test', { method: 'POST', body });
+      if (data.ok) {
+        $('#settingsState').textContent = `连接成功，可用模型：${(data.models || []).slice(0, 5).join('、') || data.model}`;
+      } else {
+        $('#settingsState').textContent = `连接失败：${data.error}`;
+      }
+    } catch (e) {
+      $('#settingsState').textContent = e.message;
+    } finally {
+      $('#testKey').disabled = false;
+    }
+  }
+
+  /* ---------------- 看大图 ---------------- */
+  function openLightbox(src) {
+    $('#lightboxImg').src = src;
+    $('#lightbox').hidden = false;
+  }
+  function closeLightbox() {
+    $('#lightbox').hidden = true;
+    $('#lightboxImg').src = '';
+  }
+
+  /* ---------------- 底部网站栏 ---------------- */
   function dockTag(url) {
     let host = '';
     try { host = new URL(url).hostname; } catch (e) { return '文档'; }
@@ -475,7 +975,7 @@
   }
 
   /* ---------------- 视图切换 ---------------- */
-  /* 每块大视图渲染一次就缓存，只有数据变了（state.ver 递增）才重建 DOM */
+  /* 任务视图渲染一次就缓存，只有数据变了（state.ver 递增）才重建 DOM */
   function touchData() { state.ver = (state.ver || 0) + 1; }
   function viewFresh(name) { return state.viewVer && state.viewVer[name] === state.ver; }
   function markFresh(name) { state.viewVer = state.viewVer || {}; state.viewVer[name] = state.ver; }
@@ -483,18 +983,21 @@
   function renderView(name) {
     if (name === 'today') { renderToday(); markFresh('today'); }
     if (name === 'calendar') { renderCalendar(); renderDetail(state.calSel); markFresh('calendar'); }
-    if (name === 'diary') { renderDiaryEditor(); renderDiaryList(); markFresh('diary'); }
+    if (name === 'notes') enterNotes();
   }
 
   function setView(name) {
-    if (state.view === name) return;
+    if (state.view === name) {
+      if (name === 'notes') enterNotes();
+      return;
+    }
     state.view = name;
+    document.body.dataset.view = name;
 
-    /* 先只做 class 切换：一帧内完成，绝不堆渲染 */
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('is-active', t.dataset.view === name));
-    document.querySelectorAll('.view').forEach(v => v.classList.toggle('is-active', v.id === 'view-' + name));
+    $$('.tab').forEach(t => t.classList.toggle('is-active', t.dataset.view === name));
+    $$('.view').forEach(v => v.classList.toggle('is-active', v.id === 'view-' + name));
 
-    /* 已有缓存就不再重建，切换只剩一次 display 变化 */
+    if (name === 'notes') { enterNotes(); return; }
     if (!viewFresh(name)) requestAnimationFrame(() => renderView(name));
   }
 
@@ -512,7 +1015,7 @@
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
   }
 
   /* ---------------- 时钟 + 跨天 ---------------- */
@@ -523,18 +1026,29 @@
     $('#clockDate').textContent = `${now.getMonth() + 1} 月 ${now.getDate()} 日 ${WEEK[now.getDay()]}`;
     const ds = ymd(now);
     if (ds !== lastDay) {
+      const prev = lastDay;
       lastDay = ds;
-      state.diaryDate = ds;
       renderToday();
       renderMini();
       if (state.view === 'calendar') renderCalendar();
-      if (state.view === 'diary') { renderDiaryEditor(); renderDiaryList(); }
+      refreshMiniNote();
+      if (notes.date === prev) {
+        notes.date = ds;
+        notes.note = null;
+        notes.shots = [];
+        renderNotesSide();
+        renderNotesMain();
+        renderCompose();
+        renderShotList();
+        renderChatLog();
+        loadNote(ds);
+      }
     }
   }
 
   /* ---------------- 事件绑定 ---------------- */
   function bind() {
-    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.view)));
+    $$('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.view)));
 
     $('#miniPrev').addEventListener('click', () => { state.miniMonth.m--; if (state.miniMonth.m < 0) { state.miniMonth.m = 11; state.miniMonth.y--; } renderMini(); });
     $('#miniNext').addEventListener('click', () => { state.miniMonth.m++; if (state.miniMonth.m > 11) { state.miniMonth.m = 0; state.miniMonth.y++; } renderMini(); });
@@ -544,53 +1058,165 @@
     $('#calNext').addEventListener('click', () => { state.calMonth.m++; if (state.calMonth.m > 11) { state.calMonth.m = 0; state.calMonth.y++; } renderCalendar(); markFresh('calendar'); });
     $('#calToday').addEventListener('click', () => openCalendar(todayStr()));
 
-    $('#openDiary').addEventListener('click', () => { state.diaryDate = todayStr(); setView('diary'); $('#diaryBig').focus(); });
-    $('#diaryToday').addEventListener('click', () => { state.diaryDate = todayStr(); renderDiaryEditor(); });
-    $('#diaryExport').addEventListener('click', exportDiary);
-
-    const saveTodayDiary = debounce(() => {
-      saveDiary(todayStr(), $('#todayDiary').value);
-      const dot = $('#miniSaved');
-      dot.textContent = '已保存';
-      dot.classList.add('is-saved');
-    }, 450);
-
-    $('#todayDiary').addEventListener('input', e => {
-      $('#todayDiaryCount').textContent = e.target.value.trim().length + ' 字';
-      const dot = $('#miniSaved');
-      dot.textContent = '正在保存…';
-      dot.classList.remove('is-saved');
-      saveTodayDiary();
+    $('#openNotes').addEventListener('click', () => {
+      notes.date = todayStr();
+      notes.note = null;
+      notes.shots = [];
+      notes.saveMsg = { text: '', type: '' };
+      setView('notes');
+      setTimeout(() => $('#dropZone').focus(), 80);
     });
 
-    const saveBigDiary = debounce(() => {
-      saveDiary(state.diaryDate, $('#diaryBig').value);
-      const dot = $('#diarySaved');
-      dot.textContent = '已保存';
-      dot.classList.add('is-saved');
-      renderDiaryList();
-    }, 450);
-
-    $('#diaryBig').addEventListener('input', e => {
-      $('#diaryCount').textContent = e.target.value.trim().length + ' 字';
-      const dot = $('#diarySaved');
-      dot.textContent = '正在保存…';
-      dot.classList.remove('is-saved');
-      saveBigDiary();
+    /* 笔记：侧栏 */
+    $('#notesTodayBtn').addEventListener('click', () => selectNote(todayStr()));
+    $('#notesReload').addEventListener('click', async () => {
+      await loadNote(notes.date);
+      await refreshDays();
+      toast('已从磁盘刷新');
+    });
+    $('#notesOpenFolder').addEventListener('click', async () => {
+      if (!(await ensureServer())) return;
+      try {
+        await api(`/api/notes/${notes.date}/open`, { method: 'POST' });
+      } catch (e) { toast(e.message); }
+    });
+    $('#notesExport').addEventListener('click', () => {
+      const n = notes.note;
+      if (!n || !n.markdown.trim()) { toast('这一天还没有笔记'); return; }
+      const blob = new Blob([n.markdown], { type: 'text/markdown;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${notes.date}-笔记.md`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+      toast('已导出 md');
     });
 
-    $('#diaryDate').addEventListener('change', e => {
-      state.diaryDate = e.target.value || todayStr();
-      renderDiaryEditor();
+    /* 笔记：加截图 */
+    const zone = $('#dropZone');
+    const input = $('#fileInput');
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+    });
+    input.addEventListener('change', () => {
+      addFiles(input.files);
+      input.value = '';
+    });
+
+    /* 拖拽：整个笔记页都是投放区，拖到哪儿松手都算数 */
+    const notesView = $('#view-notes');
+    const hasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    let dragHideTimer = 0;
+    function markDrag(on) {
+      clearTimeout(dragHideTimer);
+      if (on) {
+        notesView.classList.add('is-dragging');
+      } else {
+        dragHideTimer = setTimeout(() => {
+          notesView.classList.remove('is-dragging');
+          zone.classList.remove('is-drag');
+        }, 120);
+      }
+    }
+    document.addEventListener('dragenter', e => {
+      if (state.view !== 'notes' || !hasFiles(e)) return;
+      e.preventDefault();
+      markDrag(true);
+    });
+    document.addEventListener('dragover', e => {
+      if (state.view !== 'notes' || !hasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      markDrag(true);
+      if (zone.contains(e.target)) zone.classList.add('is-drag');
+    });
+    document.addEventListener('dragleave', () => {
+      if (state.view !== 'notes') return;
+      markDrag(false);
+    });
+    document.addEventListener('drop', e => {
+      if (state.view !== 'notes') return;
+      const files = e.dataTransfer ? Array.from(e.dataTransfer.files || []) : [];
+      markDrag(false);
+      zone.classList.remove('is-drag');
+      if (!files.length) return;
+      e.preventDefault();
+      addFiles(files);
+    });
+    document.addEventListener('paste', e => {
+      if (state.view !== 'notes') return;
+      const items = Array.from((e.clipboardData && e.clipboardData.items) || [])
+        .filter(it => /^image\//.test(it.type));
+      if (!items.length) return;
+      const files = items.map(it => it.getAsFile()).filter(Boolean);
+      if (!files.length) return;
+      e.preventDefault();
+      addFiles(files);
+    });
+
+    /* 笔记：保存 */
+    $('#saveNote').addEventListener('click', saveNote);
+    $('#noteHint').addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); saveNote(); }
+    });
+
+    /* 笔记：聊天 */
+    $('#quickRow').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-quick]');
+      if (btn) sendChat(btn.dataset.quick);
+    });
+    $('#chatForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const input = $('#chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      sendChat(text);
+    });
+    $('#chatInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const text = e.target.value.trim();
+        if (!text) return;
+        e.target.value = '';
+        sendChat(text);
+      }
+    });
+
+    /* 看大图 */
+    $('#notesPreview').addEventListener('click', e => {
+      const img = e.target.closest('img');
+      if (img) openLightbox(img.src);
+    });
+    $('#chatLog').addEventListener('click', e => {
+      const img = e.target.closest('img');
+      if (img) openLightbox(img.src);
+    });
+    $('#lightbox').addEventListener('click', closeLightbox);
+
+    /* 设置 */
+    $('#openSettings').addEventListener('click', openSettings);
+    $('#closeSettings').addEventListener('click', closeSettings);
+    $('#saveSettings').addEventListener('click', saveSettings);
+    $('#testKey').addEventListener('click', testKey);
+    $('#settingsModal').addEventListener('click', e => {
+      if (e.target === $('#settingsModal')) closeSettings();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (!$('#lightbox').hidden) closeLightbox();
+        else if (!$('#settingsModal').hidden) closeSettings();
+      }
     });
 
     window.addEventListener('storage', e => {
       if (e.key === LS_TASKS) { state.tasks = loadLS(LS_TASKS, {}); refreshAll(); }
-      if (e.key === LS_DIARY) {
-        state.diary = loadLS(LS_DIARY, {});
-        renderTodayDiary();
-        if (state.view === 'diary') { renderDiaryEditor(); renderDiaryList(); }
-      }
+    });
+
+    window.addEventListener('hashchange', () => {
+      const h = (location.hash || '').replace('#', '');
+      if (h === 'calendar' || h === 'notes' || h === 'today') setView(h);
     });
   }
 
@@ -615,7 +1241,7 @@
         dispersion: 1.3, shade: .52, rim: 1.95, edgeW: 9, sat: .94, edge: .55,
         light: -125, smooth: 1, settle: 60, materialize: 260
       };
-      document.querySelectorAll('.topbar, .dock').forEach(el => Hyalite.attach(el, big));
+      $$('.topbar, .dock').forEach(el => Hyalite.attach(el, big));
     } catch (e) { /* 不支持时自动忽略 */ }
   }
 
@@ -624,16 +1250,17 @@
     state.miniMonth = { y: now.getFullYear(), m: now.getMonth() };
     state.calMonth = { y: now.getFullYear(), m: now.getMonth() };
     state.calSel = todayStr();
-    state.diaryDate = todayStr();
 
     renderDock();
     renderToday();
     renderMini();
     renderCalendar();
     renderDetail(state.calSel);
-    renderDiaryEditor();
-    renderDiaryList();
-    state.viewVer = { today: state.ver, calendar: state.ver, diary: state.ver };
+    renderNotesSide();
+    renderNotesMain();
+    renderCompose();
+    renderChatLog();
+    state.viewVer = { today: state.ver, calendar: state.ver };
     initGlass();
     initScrollHint();
     bind();
@@ -641,10 +1268,16 @@
     setInterval(tick, 1000);
 
     const h = (location.hash || '').replace('#', '');
-    if (h === 'calendar' || h === 'diary') setView(h);
+    if (h === 'calendar' || h === 'notes') setView(h);
+
+    loadStatus().then(() => {
+      refreshMiniNote();
+      refreshDays();
+      loadNote(notes.date);
+    });
 
     const p = PLAN.days[todayStr()];
-    toast(p ? `今天：${p.topic}` : '今天没有排任务，自由安排');
+    setTimeout(() => toast(p ? `今天：${p.topic}` : '今天没有排任务，自由安排'), 400);
   }
 
   /* ---------------- 左侧滑动条：仅滑动时出现 ---------------- */
@@ -656,7 +1289,6 @@
     document.body.appendChild(hint);
 
     let hideTimer = 0;
-    let raf = 0;
 
     function size() {
       const sh = main.scrollHeight;
@@ -672,7 +1304,6 @@
       const r = main.getBoundingClientRect();
       const h = hint.offsetHeight;
       const max = Math.max(1, main.scrollHeight - main.clientHeight);
-      const y = r.top + 8 + (r.height - h - 16) * (main.scrollTop / max);
       hint.style.top = Math.round(r.top + 8) + 'px';
       hint.style.transform = `translateY(${Math.round((r.height - h - 16) * (main.scrollTop / max))}px)`;
     }
@@ -689,7 +1320,7 @@
     main.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', () => { size(); place(); });
     /* 视图切换后内容高度会变 */
-    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setTimeout(() => { size(); place(); }, 60)));
+    $$('.tab').forEach(t => t.addEventListener('click', () => setTimeout(() => { size(); place(); }, 60)));
   }
 
   document.addEventListener('DOMContentLoaded', init);

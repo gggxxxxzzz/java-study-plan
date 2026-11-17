@@ -33,15 +33,21 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.8v2.4M17 2.8v2.4M3.6 9.2h16.8M5.4 4.8h13.2a1.8 1.8 0 0 1 1.8 1.8v13a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8v-13a1.8 1.8 0 0 1 1.8-1.8Z"/></svg>
       日历
     </button>
-    <button class="tab glass" data-view="diary">
+    <button class="tab glass" data-view="notes">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 3.6h9.1l3.9 3.9v12.9H6.2a1.8 1.8 0 0 1-1.8-1.8V5.4a1.8 1.8 0 0 1 1.8-1.8Z"/><path d="M8.2 9.6h5.4M8.2 13h7.6M8.2 16.4h4.6"/></svg>
-      日记
+      笔记
     </button>
   </nav>
 
-  <div class="clock">
-    <span class="clock-time" id="clockTime">--:--:--</span>
-    <span class="clock-date" id="clockDate">—</span>
+  <div class="topbar-right">
+    <span class="server-dot" id="serverDot" title="正在检查本地服务…"></span>
+    <button class="icon-btn glass" id="openSettings" title="DeepSeek 设置" aria-label="设置">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7h.09A1.7 1.7 0 0 0 10.12 3.14V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+    </button>
+    <div class="clock">
+      <span class="clock-time" id="clockTime">--:--:--</span>
+      <span class="clock-date" id="clockDate">—</span>
+    </div>
   </div>
 </header>
 
@@ -93,15 +99,16 @@
           <button class="btn glass wide" id="goCalendar">打开完整日历</button>
         </article>
 
-        <article class="card diary-mini">
+        <article class="card note-mini">
           <header class="card-head">
-            <h2>今日日记</h2>
-            <span class="saved-dot" id="miniSaved">自动保存</span>
+            <h2>今日笔记</h2>
+            <span class="saved-dot" id="miniNoteState">—</span>
           </header>
-          <textarea id="todayDiary" class="diary-input" rows="6" placeholder="今天学了什么、卡在哪、想通了什么，随手记两句。"></textarea>
-          <div class="diary-foot">
-            <span id="todayDiaryCount">0 字</span>
-            <button class="btn glass" id="openDiary">展开写</button>
+          <p class="note-mini-folder" id="miniNoteFolder">notes/—/</p>
+          <div class="note-mini-preview" id="miniNotePreview">还没有截图。去「笔记」页拖一张进来，点手动保存就自动整理。</div>
+          <div class="note-mini-foot">
+            <span id="miniNoteCount">0 块 · 0 张截图</span>
+            <button class="btn glass" id="openNotes">打开笔记</button>
           </div>
         </article>
       </aside>
@@ -136,29 +143,102 @@
     </div>
   </section>
 
-  <!-- 日记 -->
-  <section class="view" id="view-diary">
-    <div class="diary-grid">
-      <article class="card diary-main">
-        <header class="card-head">
-          <h2 id="diaryTitle">日记</h2>
-          <div class="head-actions">
-            <button class="btn glass" id="diaryToday">今天</button>
-            <button class="btn glass" id="diaryExport">导出全部</button>
+  <!-- 笔记 -->
+  <section class="view" id="view-notes">
+    <div class="notes-layout">
+
+      <aside class="card notes-side">
+        <header class="notes-side-head">
+          <div>
+            <h2>笔记</h2>
+            <p id="notesSideSub">每天一个文件夹</p>
+          </div>
+          <button class="btn glass" id="notesTodayBtn">今天</button>
+        </header>
+        <ul id="notesDays" class="notes-days"></ul>
+        <div class="notes-side-foot">
+          <button class="btn glass wide" id="notesOpenFolder">打开当天文件夹</button>
+        </div>
+      </aside>
+
+      <article class="card notes-main">
+        <header class="notes-head">
+          <div class="notes-head-text">
+            <h2 id="notesTitle">—</h2>
+            <p id="notesMeta">0 块 · 0 张截图</p>
+          </div>
+          <div class="notes-actions">
+            <button class="btn glass" id="notesReload" title="重新从磁盘读取">刷新</button>
+            <button class="btn glass" id="notesExport">导出 md</button>
           </div>
         </header>
-        <input type="date" id="diaryDate" class="date-input">
-        <textarea id="diaryBig" class="diary-input big" placeholder="今天学了什么、哪里卡住了、明天先做什么。"></textarea>
-        <div class="diary-foot">
-          <span id="diaryCount">0 字</span>
-          <span class="saved-dot" id="diarySaved">自动保存</span>
+
+        <div class="notes-body" id="notesBody">
+          <article class="md-body" id="notesPreview"></article>
+          <div class="notes-empty" id="notesEmpty">
+            <div class="notes-empty-icon">＋</div>
+            <h3>这一天还没有笔记</h3>
+            <p>把课堂截图拖到笔记页任意位置（或直接 <kbd>⌘V</kbd> 粘贴），然后点「手动保存」。<br>AI 会把图里的知识点抄下来、重新排好，存进这一天的 <code>笔记.md</code>。</p>
+          </div>
         </div>
       </article>
 
-      <article class="card diary-list">
-        <header class="card-head"><h2>写过的日子</h2><span class="pill" id="diaryTotal">0 篇</span></header>
-        <ul id="diaryEntries"></ul>
-      </article>
+      <aside class="card notes-compose">
+        <section class="compose-block">
+          <header class="compose-head">
+            <h3>加截图</h3>
+            <span id="shotCount">0 / 10</span>
+          </header>
+
+          <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="添加截图">
+            <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+            <div class="drop-plus">＋</div>
+            <p class="drop-main">拖进来，或 <span class="drop-link">选择截图</span></p>
+            <p class="drop-sub">拖到框里就加进来 · 也可以直接粘贴</p>
+          </div>
+
+          <div class="shot-list" id="shotList"></div>
+
+          <textarea id="noteHint" class="mini-textarea" rows="2" placeholder="补充一句（可选）：这页重点是…"></textarea>
+
+          <button class="primary-btn" id="saveNote">
+            <span class="btn-label">手动保存</span>
+            <span class="btn-spinner" aria-hidden="true"></span>
+          </button>
+          <p class="save-status" id="saveStatus"></p>
+        </section>
+
+        <section class="compose-block chat-block">
+          <header class="compose-head">
+            <h3>让 AI 改最后一块</h3>
+            <span class="compose-tag">只动最新块</span>
+          </header>
+
+          <div class="quick-row" id="quickRow">
+            <button type="button" data-quick="更简短">更简短</button>
+            <button type="button" data-quick="换一句">换一句</button>
+            <button type="button" data-quick="高亮语句">高亮语句</button>
+          </div>
+
+          <div class="chat-log" id="chatLog" aria-live="polite">
+            <p class="chat-tip">三个按钮是快捷要求，也可以在下面自己说。改的永远是最新保存的那一块，前面的笔记不会动。</p>
+          </div>
+
+          <form class="chat-form" id="chatForm">
+            <textarea id="chatInput" rows="2" placeholder="比如：第二个例子再短一点"></textarea>
+            <button type="submit" id="chatSend" class="chat-send">发送</button>
+          </form>
+        </section>
+      </aside>
+
+    </div>
+
+    <div class="drop-veil" id="dropVeil" aria-hidden="true">
+      <div class="drop-veil-card">
+        <div class="drop-veil-icon">＋</div>
+        <strong>松手，截图就加进来</strong>
+        <span>拖到笔记页任意位置都行 · 一次最多 10 张</span>
+      </div>
     </div>
   </section>
 
@@ -171,8 +251,48 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- 设置 -->
+<div class="modal" id="settingsModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <header class="modal-head">
+      <h2 id="settingsTitle">DeepSeek 设置</h2>
+      <button class="icon-btn glass" id="closeSettings" aria-label="关闭">×</button>
+    </header>
+
+    <label class="field">
+      <span>API Key</span>
+      <input id="setKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+      <small>只写进本机 <code>config.local.json</code>，不会上传到别的地方。</small>
+    </label>
+
+    <label class="field">
+      <span>API 地址</span>
+      <input id="setBase" type="text" spellcheck="false" placeholder="https://api.deepseek.com">
+    </label>
+
+    <label class="field">
+      <span>模型</span>
+      <input id="setModel" type="text" spellcheck="false" placeholder="deepseek-flash">
+      <small>识图要用支持图片输入的 <code>deepseek-flash</code>。</small>
+    </label>
+
+    <p class="settings-state" id="settingsState"></p>
+
+    <footer class="modal-actions">
+      <button class="btn glass" id="testKey">测试连接</button>
+      <button class="primary-btn compact" id="saveSettings">保存</button>
+    </footer>
+  </div>
+</div>
+
+<!-- 看大图 -->
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImg" alt="截图">
+</div>
+
 <script src="plan.js"></script>
-  <script src="hyalite.js"></script>
+<script src="hyalite.js"></script>
+<script src="markdown.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,4 +1,13 @@
 .DS_Store
 *.md.bak
+*.log
+
 # 计划原文（个人资料，不随仓库发布）
 后端就业学习路线-全面版.md
+
+# 本机的 DeepSeek Key 和每日笔记，只留在自己电脑上
+config.local.json
+notes/
+
+# 测试临时目录
+.test-tmp/

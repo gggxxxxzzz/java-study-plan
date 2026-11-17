@@ -1,0 +1,11 @@
+{
+  "name": "java-study-plan-notes",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Java 学习计划看板 + 截图 AI 笔记（DeepSeek 视觉）",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.mjs"
+  }
+}
