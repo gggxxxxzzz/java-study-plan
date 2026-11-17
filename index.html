@@ -40,6 +40,7 @@
   </nav>
 
   <div class="topbar-right">
+    <button class="lang-btn glass" id="langToggle" title="Switch to English" aria-label="Switch to English">EN</button>
     <span class="server-dot" id="serverDot" title="正在检查本地服务…"></span>
     <button class="icon-btn glass" id="openSettings" title="DeepSeek 设置" aria-label="设置">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.7h.09A1.7 1.7 0 0 0 10.12 3.14V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.3 9v.09a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>
@@ -178,7 +179,7 @@
           <div class="notes-empty" id="notesEmpty">
             <div class="notes-empty-icon">＋</div>
             <h3>这一天还没有笔记</h3>
-            <p>把课堂截图拖到笔记页任意位置（或直接 <kbd>⌘V</kbd> 粘贴），然后点「手动保存」。<br>AI 会把图里的知识点抄下来、重新排好，存进这一天的 <code>笔记.md</code>。</p>
+            <p data-i18n-html="notes-empty-help">把课堂截图拖到笔记页任意位置（或直接 <kbd>⌘V</kbd> 粘贴），然后点「手动保存」。<br>AI 会把图里的知识点抄下来、重新排好，存进这一天的 <code>笔记.md</code>。</p>
           </div>
         </div>
       </article>
@@ -193,7 +194,7 @@
           <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="添加截图">
             <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
             <div class="drop-plus">＋</div>
-            <p class="drop-main">拖进来，或 <span class="drop-link">选择截图</span></p>
+            <p class="drop-main" data-i18n-html="drop-main">拖进来，或 <span class="drop-link">选择截图</span></p>
             <p class="drop-sub">拖到框里就加进来 · 也可以直接粘贴</p>
           </div>
 
@@ -218,10 +219,11 @@
             <button type="button" data-quick="更简短">更简短</button>
             <button type="button" data-quick="换一句">换一句</button>
             <button type="button" data-quick="高亮语句">高亮语句</button>
+            <button type="button" data-quick="润色">润色</button>
           </div>
 
           <div class="chat-log" id="chatLog" aria-live="polite">
-            <p class="chat-tip">三个按钮是快捷要求，也可以在下面自己说。改的永远是最新保存的那一块，前面的笔记不会动。</p>
+            <p class="chat-tip">下面四个按钮是快捷要求，也可以自己说。改的永远是最新保存的那一块，前面的笔记不会动。</p>
           </div>
 
           <form class="chat-form" id="chatForm">
@@ -262,7 +264,7 @@
     <label class="field">
       <span>API Key</span>
       <input id="setKey" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
-      <small>只写进本机 <code>config.local.json</code>，不会上传到别的地方。</small>
+      <small data-i18n-html="key-help">只写进本机 <code>config.local.json</code>，不会上传到别的地方。</small>
     </label>
 
     <label class="field">
@@ -273,7 +275,7 @@
     <label class="field">
       <span>模型</span>
       <input id="setModel" type="text" spellcheck="false" placeholder="deepseek-flash">
-      <small>识图要用支持图片输入的 <code>deepseek-flash</code>。</small>
+      <small data-i18n-html="model-help">识图要用支持图片输入的 <code>deepseek-flash</code>。</small>
     </label>
 
     <p class="settings-state" id="settingsState"></p>
@@ -308,6 +310,8 @@
 </div>
 
 <script src="plan.js"></script>
+<script src="plan.en.js"></script>
+<script src="i18n.js"></script>
 <script src="hyalite.js"></script>
 <script src="markdown.js"></script>
 <script src="app.js"></script>

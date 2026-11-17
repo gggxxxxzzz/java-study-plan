@@ -5,9 +5,16 @@
 (() => {
   'use strict';
 
+  const PLAN_ZH = window.PLAN;
+  const SITES_ZH = window.STUDY_SITES;
   const LS_TASKS = 'javaplan.tasks.v1';
   const RING_LEN = 2 * Math.PI * 38;          // 238.76
   const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  function dateLabel(d) {
+    const zh = `${d.getMonth() + 1} 月 ${d.getDate()} 日 ${WEEK[d.getDay()]}`;
+    return (window.I18N && I18N.lang === 'en') ? I18N.t(zh) : zh;
+  }
   const MAX_SHOTS = 10;
   const MAX_SHOT_BYTES = 26 * 1024 * 1024;
 
@@ -206,7 +213,7 @@
     const p = PLAN.days[ds];
     const now = new Date();
 
-    $('#todayEyebrow').textContent = `今天 · ${now.getMonth() + 1} 月 ${now.getDate()} 日 ${WEEK[now.getDay()]}`;
+    $('#todayEyebrow').textContent = `${(window.I18N && I18N.lang === 'en') ? 'Today' : '今天'} · ${dateLabel(now)}`;
 
     const ringFg = $('.ring-fg');
     const ringNum = $('#todayRingNum');
@@ -240,7 +247,7 @@
 
       $('#todayTopic').textContent = after ? '这一轮计划走完了' : '今天没有排任务';
       $('#todayFocus').textContent = after
-        ? '28 天已经全部过完。可以回头把没勾完的任务补上，或者直接开下一轮：并发、JVM 或 Spring。'
+        ? `${PLAN_DATES.length} 天已经全部过完。可以回头把没勾完的任务补上，或者直接开下一轮：并发、JVM 或 Spring。`
         : `自由安排也行：复习错题、补笔记，或者提前看下一节「${PLAN.days[next].topic}」（${fmtCn(next)}）。`;
 
       ringFg.style.strokeDashoffset = RING_LEN;
@@ -806,7 +813,7 @@
 
     const tip = document.createElement('p');
     tip.className = 'chat-tip';
-    tip.textContent = '三个按钮是快捷要求，也可以在下面自己说。改的永远是最新保存的那一块，前面的笔记不会动。';
+    tip.textContent = '下面四个按钮是快捷要求，也可以自己说。改的永远是最新保存的那一块，前面的笔记不会动。';
     log.append(tip);
 
     (notes.chats[notes.date] || []).forEach(msg => {
@@ -1089,6 +1096,48 @@
     if (name === 'notes') enterNotes();
   }
 
+  /* ---------------- 中英文切换 ---------------- */
+  function applyPlanLang(lang) {
+    const en = lang === 'en';
+    window.PLAN = en && window.PLAN_EN ? window.PLAN_EN : PLAN_ZH;
+    window.STUDY_SITES = en && window.STUDY_SITES_EN ? window.STUDY_SITES_EN : SITES_ZH;
+    const brandTitle = $('#brandTitle');
+    const brandSub = $('#brandSub');
+    if (brandTitle) brandTitle.textContent = window.PLAN.title;
+    if (brandSub) brandSub.textContent = window.PLAN.subtitle;
+    document.title = en ? 'Backend Career Roadmap · Daily Plan' : '后端就业学习路线 · 每日计划';
+  }
+
+  function rerenderAll() {
+    state.viewVer = {};
+    renderDock();
+    renderToday();
+    renderMini();
+    renderCalendar();
+    renderDetail(state.calSel || todayStr());
+    renderNotesSide();
+    renderNotesMain();
+    renderCompose();
+    renderShotList();
+    renderChatLog();
+    state.viewVer = { today: state.ver, calendar: state.ver };
+    if (state.view === 'notes') enterNotes();
+    if (window.I18N) I18N.refresh();
+  }
+
+  function switchLanguage() {
+    const next = (window.I18N && I18N.lang === 'en') ? 'zh' : 'en';
+    applyPlanLang(next);
+    if (window.I18N) I18N.setLang(next);
+    rerenderAll();
+    refreshMiniNote();
+    if (!$('#settingsModal').hidden) openSettings();
+    $('#blockModal').hidden = true;
+    notes.editIndex = null;
+    if (window.I18N) I18N.refresh();
+    toast(next === 'en' ? 'English · switch back anytime' : '已切回中文');
+  }
+
   function setView(name) {
     if (state.view === name) {
       if (name === 'notes') enterNotes();
@@ -1126,7 +1175,7 @@
   function tick() {
     const now = new Date();
     $('#clockTime').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    $('#clockDate').textContent = `${now.getMonth() + 1} 月 ${now.getDate()} 日 ${WEEK[now.getDay()]}`;
+    $('#clockDate').textContent = dateLabel(now);
     const ds = ymd(now);
     if (ds !== lastDay) {
       const prev = lastDay;
@@ -1152,6 +1201,8 @@
   /* ---------------- 事件绑定 ---------------- */
   function bind() {
     $$('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.view)));
+    const langBtn = $('#langToggle');
+    if (langBtn) langBtn.addEventListener('click', switchLanguage);
 
     $('#miniPrev').addEventListener('click', () => { state.miniMonth.m--; if (state.miniMonth.m < 0) { state.miniMonth.m = 11; state.miniMonth.y--; } renderMini(); });
     $('#miniNext').addEventListener('click', () => { state.miniMonth.m++; if (state.miniMonth.m > 11) { state.miniMonth.m = 0; state.miniMonth.y++; } renderMini(); });
@@ -1358,6 +1409,7 @@
   }
 
   function init() {
+    applyPlanLang(window.I18N ? I18N.lang : 'zh');
     const now = new Date();
     state.miniMonth = { y: now.getFullYear(), m: now.getMonth() };
     state.calMonth = { y: now.getFullYear(), m: now.getMonth() };
@@ -1388,6 +1440,7 @@
       loadNote(notes.date);
     });
 
+    if (window.I18N) I18N.refresh();
     const p = PLAN.days[todayStr()];
     setTimeout(() => toast(p ? `今天：${p.topic}` : '今天没有排任务，自由安排'), 400);
   }

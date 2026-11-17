@@ -21,6 +21,8 @@ const STATIC_FILES = new Map([
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/plan.js', ['plan.js', 'text/javascript; charset=utf-8']],
+  ['/plan.en.js', ['plan.en.js', 'text/javascript; charset=utf-8']],
+  ['/i18n.js', ['i18n.js', 'text/javascript; charset=utf-8']],
   ['/markdown.js', ['markdown.js', 'text/javascript; charset=utf-8']],
   ['/hyalite.js', ['hyalite.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
@@ -438,7 +440,7 @@ export function createApp(options = {}) {
         const [file, type] = entry;
         try {
           const content = await fs.readFile(path.join(appRoot, file));
-          res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+          res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
           return res.end(content);
         } catch {
           throw httpError(404, '文件不存在');

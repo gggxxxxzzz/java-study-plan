@@ -4,6 +4,8 @@
 
 A **pure front-end, zero-dependency, download-and-run** local study planner. It turns a 162-day backend engineering roadmap into a checklist you open every day: what to study today, how long each block takes, tick things off, jump straight to the day's links, and look back through a calendar.
 
+> Plan source: [Feishu doc · Backend Career Roadmap](https://my.feishu.cn/docx/I1XfdD8roomkpYxoFVEcEo8Vnqf).
+
 The original "quick diary" has since been upgraded to **AI screenshot notes**: drag a lecture screenshot in, click **Save**, and the AI reads the image, reorganizes the key points, and writes the shortest useful annotation and explanation — stored as Markdown, one folder per day.
 
 ![Interface preview](preview.png)
@@ -67,7 +69,9 @@ The three checkpoints come from the **acceptance criteria** at the end of each s
 - One folder per day: `notes/2026-11-17/笔记.md` plus `images/`.
 - Drag screenshots anywhere onto the Notes page; they land in the pending area, and **Save** calls the AI immediately.
 - Each save appends one `## HH:mm · 截图笔记` block — **earlier content is never touched**.
-- The chat box only rewrites the most recently saved block. Quick actions: **Shorter**, **Rephrase**, **Highlight**.
+- The chat box only rewrites the most recently saved block. Quick actions: **Shorter**, **Rephrase**, **Highlight**, **Polish**.
+- Your pasted wording is kept as-is by default; only **Polish** rewrites the phrasing.
+- The **EN / 中文** button in the top bar switches both the UI and the 162-day plan. Note bodies are never translated.
 - Each block has an **Edit** button at its top-right; it edits just that block's Markdown and leaves every other block untouched.
 - Screenshots and notes stay local; images are sent to DeepSeek only when you click Save.
 
@@ -104,7 +108,9 @@ Java学习计划/
 ├── style.css             All styles (glass, cards, calendar, notes, responsive)
 ├── app.js                Dashboard + Notes logic (render, checkboxes, drag, save, chat)
 ├── markdown.js           Markdown renderer for notes (escaping, code, tables, highlights)
-├── plan.js               ★ Plan data (162 days, 7 tasks per day)
+├── plan.js               ★ Chinese plan data (162 days, 7 tasks per day)
+├── plan.en.js            English plan data (generated from plan.js)
+├── i18n.js               EN/中文 switch (UI copy + plan data)
 ├── hyalite.js            Liquid-glass refraction library (MIT, see below)
 ├── server.js             Local server (zero-dependency; serves pages + notes API)
 ├── lib/

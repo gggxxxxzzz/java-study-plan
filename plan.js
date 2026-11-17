@@ -1,7 +1,7 @@
 /* 后端就业学习路线 · 每日计划（每天 8 小时 · 主线 阶段1~9 共 162 天 + 并行线 算法 90 / 计算机基础 90 / 八股 40 / AI 20）
  * 内容取自《后端就业学习路线-全面版》原文；数据由本地生成器产出，仅保存纯数据。
  */
-const STUDY_SITES = [
+var STUDY_SITES = [
  {
   "name": "廖雪峰 · Java 教程",
   "url": "https://liaoxuefeng.com/books/java/introduction/index.html"
@@ -24,7 +24,7 @@ const STUDY_SITES = [
  }
 ];
 
-const PLAN = {
+var PLAN = {
   start: '2026-11-17',
   title: '后端就业学习路线',
   subtitle: '主线 阶段 1→9 · 162 天 · 每天 8 小时',
