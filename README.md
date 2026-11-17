@@ -125,7 +125,10 @@ Java学习计划/
 ├── 启动.command           双击启动本地服务并打开浏览器
 ├── wallpaper.png         背景壁纸（原图）
 ├── wallpaper-blur.jpg    预烘焙的模糊壁纸，给卡片当玻璃背景用
-├── preview.png           界面截图
+├── preview.png           中文界面截图
+├── preview-en-today.png  英文 Today 截图
+├── preview-en-calendar.png  英文日历截图
+├── preview-en-notes.png  英文笔记页截图
 ├── notes/                每天一个文件夹（不提交，自动生成）
 ├── config.local.json     你的 DeepSeek Key（不提交，权限 0600）
 ├── README.md             中文说明

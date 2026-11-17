@@ -8,7 +8,7 @@ A **pure front-end, zero-dependency, download-and-run** local study planner. It 
 
 The original "quick diary" has since been upgraded to **AI screenshot notes**: drag a lecture screenshot in, click **Save**, and the AI reads the image, reorganizes the key points, and writes the shortest useful annotation and explanation — stored as Markdown, one folder per day.
 
-![Interface preview](preview.png)
+![Today's checklist, English UI](preview-en-today.png)
 
 ---
 
@@ -64,7 +64,11 @@ The three checkpoints come from the **acceptance criteria** at the end of each s
 - Click any day to see what to study, how many tasks, and how long each takes.
 - Tick that day's tasks directly, or jump to that day's notes.
 
+![Calendar and day detail](preview-en-calendar.png)
+
 ### 4. AI screenshot notes (new)
+
+![Screenshot notes with English UI](preview-en-notes.png)
 
 - One folder per day: `notes/2026-11-17/笔记.md` plus `images/`.
 - Drag screenshots anywhere onto the Notes page; they land in the pending area, and **Save** calls the AI immediately.
@@ -124,7 +128,10 @@ Java学习计划/
 ├── 启动.command           Double-click launcher for the local server + browser
 ├── wallpaper.png         Background wallpaper (original)
 ├── wallpaper-blur.jpg    Pre-baked blurred wallpaper used behind glass cards
-├── preview.png           Interface screenshot
+├── preview.png           Chinese interface screenshot
+├── preview-en-today.png  English: Today checklist
+├── preview-en-calendar.png  English: calendar
+├── preview-en-notes.png  English: screenshot notes
 ├── notes/                One folder per day (not committed; generated at runtime)
 ├── config.local.json     Your DeepSeek key (not committed; mode 0600)
 └── README.md
