@@ -25,13 +25,17 @@
 
 ### 要用截图 AI 笔记
 
-1. 双击 `启动.command`，会起一个本地服务并打开 `http://127.0.0.1:5271`
-2. 点右上角齿轮，填 DeepSeek API Key，点「测试连接」，成功后「保存」
-3. 切到「笔记」页，把截图拖进来，点「手动保存」
+1. 先装 **Node.js 18+**：<https://nodejs.org>，安装时勾选 **Add to PATH**
+2. 按系统双击启动文件：macOS 双击 `启动.command`，Windows 双击 `启动-Windows.bat`
+3. 服务启动成功后会自动打开 `http://127.0.0.1:5271`
+4. 点右上角齿轮，填 DeepSeek API Key，点「测试连接」，成功后「保存」
+5. 切到「笔记」页，把截图拖进来，点「手动保存」
 
 Key 在 <https://platform.deepseek.com/api_keys> 申请，只写进本机的 `config.local.json`（权限 0600），不会上传到任何地方。
 
-如果 macOS 第一次拦住 `启动.command`，右键它 → 打开。
+- macOS 第一次拦住 `启动.command`：右键它 → 打开。
+- Windows 若弹出「Windows 已保护你的电脑」：点「更多信息」→「仍要运行」。
+- 提示找不到 node：确认安装时勾了 Add to PATH，重开命令窗口后再双击。
 
 ---
 
@@ -122,7 +126,8 @@ Java学习计划/
 │   ├── 笔记生成.md        「截图 → 笔记」的规则，可以直接改
 │   └── 笔记修改.md        「改最后一块」的规则
 ├── test/                 node:test 测试，不需要真 Key
-├── 启动.command           双击启动本地服务并打开浏览器
+├── 启动.command           macOS 双击启动本地服务并打开浏览器
+├── 启动-Windows.bat       Windows 双击启动本地服务并打开浏览器
 ├── wallpaper.png         背景壁纸（原图）
 ├── wallpaper-blur.jpg    预烘焙的模糊壁纸，给卡片当玻璃背景用
 ├── preview.png           中文界面截图
@@ -217,6 +222,8 @@ JAVA_NOTES_ROOT=/path/to/notes npm start
 # 用环境变量提供 Key（优先级高于 config.local.json）
 DEEPSEEK_API_KEY=sk-... npm start
 ```
+
+Windows 下环境变量写法不同：cmd 用 `set JAVA_NOTES_PORT=6000 && npm start`，PowerShell 用 `$env:JAVA_NOTES_PORT="6000"; npm start`；直接双击 `启动-Windows.bat` 则不需要命令。
 
 ---
 

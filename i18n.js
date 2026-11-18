@@ -80,11 +80,11 @@
     '还没有内容': 'Nothing yet',
     '还没有': 'Not yet',
     '离线': 'Offline',
-    '本地服务没启动。双击「启动.command」后才能用 AI 笔记。':
-      'Local server is off. Double-click 启动.command to use AI notes.',
-    '本地服务没启动，先双击「启动.command」。': 'Local server is off. Double-click 启动.command first.',
-    '本地服务没启动：双击「启动.command」，或运行 node server.js':
-      'Local server is off: double-click 启动.command, or run node server.js',
+    '本地服务没启动。双击对应系统的启动文件后才能用 AI 笔记。':
+      'Local server is off. Double-click the launcher for your OS to use AI notes.',
+    '本地服务没启动，先双击对应系统的启动文件。': 'Local server is off. Double-click the launcher for your OS first.',
+    '本地服务没启动：macOS 双击「启动.command」，Windows 双击「启动-Windows.bat」':
+      'Local server is off: on macOS double-click 启动.command; on Windows double-click 启动-Windows.bat.',
     '本地服务没启动': 'Local server is off',
     '本地服务已连接 · 模拟模式': 'Local server connected · mock mode',
     '连不上本地服务': 'Cannot reach the local server',

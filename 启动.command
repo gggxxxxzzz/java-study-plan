@@ -13,7 +13,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-# 等服务器起来再开浏览器；端口被占用时打开的是已经启动的那个
-( sleep 1.2; open "http://127.0.0.1:5271" ) &
+# 监听成功后由 server.js 自动打开浏览器
+export JAVA_NOTES_OPEN=1
 
 exec node server.js

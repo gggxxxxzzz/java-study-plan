@@ -25,13 +25,17 @@ Recommended browsers: Chrome / Edge (the liquid-glass refraction only runs on Ch
 
 ### Want the AI screenshot notes
 
-1. Double-click `启动.command` (the launcher). It starts a local server and opens `http://127.0.0.1:5271`.
-2. Click the gear icon, paste your DeepSeek API key, click **Test connection**, then **Save**.
-3. Switch to the **Notes** tab, drag your screenshot in, and click **Save**.
+1. Install **Node.js 18+** first: <https://nodejs.org> (tick **Add to PATH** during setup).
+2. Double-click the launcher for your OS: `启动.command` on macOS, `启动-Windows.bat` on Windows.
+3. Once the server is ready, it opens `http://127.0.0.1:5271` automatically.
+4. Click the gear icon, paste your DeepSeek API key, click **Test connection**, then **Save**.
+5. Switch to the **Notes** tab, drag your screenshot in, and click **Save**.
 
 Get a key at <https://platform.deepseek.com/api_keys>. It is written only to `config.local.json` on your machine (mode 0600) and is never uploaded anywhere.
 
-On macOS, if `启动.command` is blocked the first time, right-click it and choose **Open**.
+- macOS: if `启动.command` is blocked the first time, right-click it and choose **Open**.
+- Windows: if SmartScreen says "Windows protected your PC", click **More info** → **Run anyway**.
+- "node is not recognized": reinstall Node.js with **Add to PATH**, reopen the Command Prompt, and double-click the launcher again.
 
 ---
 
@@ -125,7 +129,8 @@ Java学习计划/
 │   ├── 笔记生成.md        "Screenshot → note" rules, editable
 │   └── 笔记修改.md        "Edit the last block" rules
 ├── test/                 node:test suite, no real API key needed
-├── 启动.command           Double-click launcher for the local server + browser
+├── 启动.command           macOS launcher for the local server + browser
+├── 启动-Windows.bat       Windows launcher for the local server + browser
 ├── wallpaper.png         Background wallpaper (original)
 ├── wallpaper-blur.jpg    Pre-baked blurred wallpaper used behind glass cards
 ├── preview.png           Chinese interface screenshot
@@ -219,6 +224,8 @@ JAVA_NOTES_ROOT=/path/to/notes npm start
 # provide the key via env (takes precedence over config.local.json)
 DEEPSEEK_API_KEY=sk-... npm start
 ```
+
+On Windows the environment syntax differs: in cmd use `set JAVA_NOTES_PORT=6000 && npm start`; in PowerShell use `$env:JAVA_NOTES_PORT="6000"; npm start`. Double-clicking `启动-Windows.bat` needs no commands.
 
 ---
 

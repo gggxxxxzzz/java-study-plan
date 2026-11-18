@@ -155,7 +155,7 @@
     if (notes.status) return true;
     const s = await loadStatus();
     if (!s) {
-      toast('本地服务没启动：双击「启动.command」，或运行 node server.js');
+      toast('本地服务没启动：macOS 双击「启动.command」，Windows 双击「启动-Windows.bat」');
       return false;
     }
     return true;
@@ -957,7 +957,7 @@
       dot.classList.toggle('is-saved', !!n.mtime);
     } catch (e) {
       $('#miniNoteCount').textContent = '0 块 · 0 张截图';
-      $('#miniNotePreview').textContent = '本地服务没启动。双击「启动.command」后才能用 AI 笔记。';
+      $('#miniNotePreview').textContent = '本地服务没启动。双击对应系统的启动文件后才能用 AI 笔记。';
       const dot = $('#miniNoteState');
       dot.textContent = '离线';
       dot.classList.remove('is-saved');
@@ -994,7 +994,7 @@
           ? `Key 已配置${s.fromEnv ? '（来自环境变量）' : ''}，模型 ${s.model}。`
           : '还没配置 Key。填好后点「保存」，再回笔记页保存一张截图试试。';
     } catch (e) {
-      $('#settingsState').textContent = '本地服务没启动，先双击「启动.command」。';
+      $('#settingsState').textContent = '本地服务没启动，先双击对应系统的启动文件。';
     }
   }
 

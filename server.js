@@ -1,5 +1,5 @@
 /* 本地服务：托管看板静态页 + 笔记 API + DeepSeek 视觉调用
- * 只监听 127.0.0.1，零依赖。启动：node server.js 或双击「启动.command」。 */
+ * 只监听 127.0.0.1，零依赖。启动：node server.js，或双击「启动.command」（macOS）/「启动-Windows.bat」（Windows）。 */
 
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -476,6 +476,14 @@ export function createApp(options = {}) {
   return { server, store, configPath, notesRoot, appRoot, mock };
 }
 
+function openBrowser(url) {
+  const command = process.platform === 'win32' ? 'cmd.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  execFile(command, args, { windowsHide: true }, err => {
+    if (err) console.error(`没能自动打开浏览器，请手动打开 ${url}`);
+  });
+}
+
 export async function start() {
   const app = createApp();
   await fs.mkdir(app.notesRoot, { recursive: true });
@@ -502,6 +510,8 @@ export async function start() {
   console.log('');
   console.log('  关掉这个窗口或按 Ctrl+C 停止服务。');
   console.log('');
+
+  if (process.env.JAVA_NOTES_OPEN === '1') openBrowser(`http://${HOST}:${PORT}`);
 
   const shutdown = () => {
     console.log('\n正在关闭…');
